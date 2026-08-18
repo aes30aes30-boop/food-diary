@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { supabase } from "../supabaseClient";
+import { supabase } from "./supabaseClient";
 import { Utensils } from "lucide-react";
 
 export default function Auth() {
