@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Check } from "lucide-react";
-import { CATEGORIES, categoryByKey, subtypeByKey, calcPortions, fmt } from "../lib/portions";
-
+import { CATEGORIES, categoryByKey, subtypeByKey, calcPortions, fmt } from "./portions";
 export default function EntryForm({ meal, initial, onSave, onCancel }) {
   const [dish, setDish] = useState(initial?.dish || "");
   const [time, setTime] = useState(initial?.time || "");
