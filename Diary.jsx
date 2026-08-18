@@ -282,3 +282,4 @@ export default function Diary({ session }) {
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
+}
