@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
-import Auth from "./components/Auth";
-import Diary from "./components/Diary";
-
+import Auth from "./Auth";
+import Diary from "./Diary";
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
