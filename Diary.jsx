@@ -1,4 +1,3 @@
-jsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Plus, Trash2, Pencil, X, ChevronLeft, ChevronRight, CalendarDays, Utensils, Droplet, LogOut,
