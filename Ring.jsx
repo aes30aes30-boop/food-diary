@@ -1,5 +1,5 @@
 import React from "react";
-import { fmt } from "../lib/portions";
+import { fmt } from "./portions";
 
 export default function Ring({ value, target, color, label, sub }) {
   const size = 74, stroke = 8, r = (size - stroke) / 2, c = 2 * Math.PI * r;
