@@ -83,29 +83,36 @@ export default function Diary({ session }) {
   useEffect(() => { loadDates(); loadSettings(); }, [loadDates, loadSettings]);
   useEffect(() => { loadDay(date); }, [date, loadDay]);
 
-  const handleSave = async (entry) => {
-    const payload = {
-      user_id: userId,
-      entry_date: date,
-      meal: entry.meal,
-      time: entry.time,
-      dish: entry.dish,
-      category: entry.category,
-      subtype: entry.subtype,
-      quantity: entry.quantity,
-      unit: entry.unit,
-      portions: entry.portions,
-      note: entry.note,
-    };
-    let error;
-    if (entry.id) {
-      ({ error } = await supabase.from("entries").update(payload).eq("id", entry.id).eq("user_id", userId));
-    } else {
-      ({ error } = await supabase.from("entries").insert(payload));
+  const handleSave = async (entryOrList) => {
+    const list = Array.isArray(entryOrList) ? entryOrList : [entryOrList];
+    let anyError = null;
+    let anyUpdated = false;
+    for (const entry of list) {
+      const payload = {
+        user_id: userId,
+        entry_date: date,
+        meal: entry.meal,
+        time: entry.time,
+        dish: entry.dish,
+        category: entry.category,
+        subtype: entry.subtype,
+        quantity: entry.quantity,
+        unit: entry.unit,
+        portions: entry.portions,
+        note: entry.note,
+      };
+      let error;
+      if (entry.id) {
+        anyUpdated = true;
+        ({ error } = await supabase.from("entries").update(payload).eq("id", entry.id).eq("user_id", userId));
+      } else {
+        ({ error } = await supabase.from("entries").insert(payload));
+      }
+      if (error) anyError = error;
     }
-    if (error) { showToast("Не удалось сохранить: " + error.message); return; }
+    if (anyError) { showToast("Не удалось сохранить: " + anyError.message); return; }
     setModal(null);
-    showToast(entry.id ? "Запись обновлена" : "Запись добавлена");
+    showToast(anyUpdated ? "Запись обновлена" : "Запись добавлена");
     loadDay(date);
     loadDates();
   };
