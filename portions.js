@@ -1,165 +1,105 @@
-import React, { useState, useEffect, useRef } from "react";
-import { X, Check } from "lucide-react";
-import { CATEGORIES, categoryByKey, calcPortions, fmt, LEGUMES_GRAMS_PER_HALF_PORTION } from "./portions";
+// Конфигурация групп питания и правил пересчёта в порции.
+// unitsPerPortion — сколько единиц (граммов / штук / ложек) составляют 1 порцию.
+// portions = количество / unitsPerPortion
 
-function nowTime() {
-  return new Date().toTimeString().slice(0, 5);
+export const CATEGORIES = [
+  {
+    key: "Белки",
+    label: "Белки",
+    color: "#A6553C",
+    dayTarget: 10,
+    subtypes: [
+      { key: "animal", label: "Мясо, рыба, сыр", unit: "г", unitsPerPortion: 30 },
+      { key: "cottage", label: "Творог", unit: "г", unitsPerPortion: 50 },
+      { key: "yogurt", label: "Йогурт", unit: "баночка", unitsPerPortion: 1 },
+      { key: "egg", label: "Яйцо", unit: "шт", unitsPerPortion: 1 },
+      { key: "plant", label: "Растительный (тофу, орехи и т.п.)", unit: "г", unitsPerPortion: 70 },
+    ],
+  },
+  {
+    key: "Углеводы",
+    label: "Углеводы",
+    color: "#C99A46",
+    dayTarget: 6.5,
+    dayTargetLabel: "6–7",
+    subtypes: [
+      { key: "bread", label: "Хлеб", unit: "г", unitsPerPortion: 25 },
+      { key: "grain", label: "Крупы / крахмалистые / бобовые", unit: "г", unitsPerPortion: 70 },
+    ],
+  },
+  {
+    key: "Фрукты",
+    label: "Фрукты",
+    color: "#C15B72",
+    dayTarget: 4,
+    subtypes: [
+      { key: "fresh", label: "Свежие", unit: "г", unitsPerPortion: 100 },
+      { key: "dried", label: "Сухофрукты", unit: "г", unitsPerPortion: 15 },
+    ],
+  },
+  {
+    key: "Овощи",
+    label: "Овощи",
+    color: "#5E7C4F",
+    dayTarget: 5,
+    subtypes: [{ key: "veg", label: "Овощи", unit: "г", unitsPerPortion: 100 }],
+  },
+  {
+    key: "Жиры",
+    label: "Жиры",
+    color: "#8A6A3D",
+    dayTarget: 3,
+    subtypes: [
+      { key: "nuts", label: "Орехи", unit: "г", unitsPerPortion: 15 },
+      { key: "avocado", label: "Авокадо", unit: "шт", unitsPerPortion: 0.5 },
+      { key: "butter", label: "Масло", unit: "ст.л.", unitsPerPortion: 1 },
+    ],
+  },
+  {
+    key: "Молоко",
+    label: "Молоко",
+    color: "#6E85A0",
+    dayTarget: 1,
+    dayTargetLabel: "0–2",
+    subtypes: [{ key: "milk", label: "Молочные продукты", unit: "мл", unitsPerPortion: 100 }],
+  },
+];
+
+export const MEALS = ["Завтрак", "Обед", "Перекус", "Ужин"];
+
+// Норма по приёмам пищи (порции) — только для групп, где она была задана изначально
+export const MEAL_TARGETS = {
+  "Завтрак": { Белки: 3, Углеводы: 2, Фрукты: 1, Овощи: 0.5 },
+  "Обед": { Белки: 3, Углеводы: 2, Фрукты: 1.5, Овощи: 2 },
+  "Перекус": { Белки: 1, Углеводы: 1, Фрукты: 1.5, Овощи: 1 },
+  "Ужин": { Белки: 3, Углеводы: 2, Овощи: 2 },
+};
+
+export const DEFAULT_WATER_TARGET_ML = 1500;
+
+// Бобовые: одновременно белок и углевод. Вес делится пополам,
+// каждая половина считается по своей норме (70 г = 1 порция).
+export const LEGUMES_GRAMS_PER_HALF_PORTION = 70;
+
+export function categoryByKey(key) {
+  return CATEGORIES.find((c) => c.key === key);
 }
 
-function uid() {
-  try {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  } catch (e) { /* fall through */ }
-  return "id-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+export function subtypeByKey(catKey, subKey) {
+  const cat = categoryByKey(catKey);
+  return cat?.subtypes.find((s) => s.key === subKey);
 }
 
-const LEGUMES_KEY = "__legumes__";
+// Округление до 0.1 порции по умолчанию
+export function calcPortions(catKey, subKey, quantity) {
+  const sub = subtypeByKey(catKey, subKey);
+  if (!sub || !quantity || quantity <= 0) return 0;
+  const raw = quantity / sub.unitsPerPortion;
+  return Math.round(raw * 10) / 10;
+}
 
-export default function EntryForm({ meal, initial, onSave, onCancel }) {
-  const [dish, setDish] = useState(initial?.dish || "");
-  const [time, setTime] = useState(initial?.time || nowTime());
-  const [category, setCategory] = useState(initial?.category || CATEGORIES[0].key);
-  const [subtype, setSubtype] = useState(
-    initial?.subtype || categoryByKey(initial?.category || CATEGORIES[0].key)?.subtypes[0]?.key
-  );
-  const [quantity, setQuantity] = useState(initial?.quantity ?? "");
-  const [note, setNote] = useState(initial?.note || "");
-  const firstRef = useRef(null);
-
-  useEffect(() => { firstRef.current?.focus(); }, []);
-
-  // При смене категории — подбираем безопасный подтип
-  useEffect(() => {
-    if (category === LEGUMES_KEY) return;
-    const cat = categoryByKey(category);
-    if (cat && !cat.subtypes.some((s) => s.key === subtype)) {
-      setSubtype(cat.subtypes[0].key);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category]);
-
-  const isLegumes = category === LEGUMES_KEY;
-  const cat = !isLegumes ? categoryByKey(category) : null;
-  // Защита от рассинхронизации category/subtype между рендерами
-  const sub = !isLegumes ? (cat?.subtypes.find((s) => s.key === subtype) || cat?.subtypes[0]) : null;
-
-  const qtyNum = parseFloat(String(quantity).replace(",", ".")) || 0;
-  const portions = !isLegumes && sub ? calcPortions(category, sub.key, qtyNum) : 0;
-
-  const half = qtyNum / 2;
-  const legumesPortion = Math.round((half / LEGUMES_GRAMS_PER_HALF_PORTION) * 10) / 10;
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!dish.trim() || qtyNum <= 0) return;
-
-    if (isLegumes) {
-      // Бобовые: одна запись превращается в две — белок и углеводы
-      const base = { meal, time: time || null, note: note.trim() || null };
-      onSave([
-        {
-          id: initial?.id,
-          ...base,
-          dish: dish.trim() + " (белок)",
-          category: "Белки",
-          subtype: "plant",
-          quantity: half,
-          unit: "г",
-          portions: legumesPortion,
-        },
-        {
-          id: initial?.id ? uid() : undefined,
-          ...base,
-          dish: dish.trim() + " (углеводы)",
-          category: "Углеводы",
-          subtype: "grain",
-          quantity: half,
-          unit: "г",
-          portions: legumesPortion,
-        },
-      ]);
-      return;
-    }
-
-    onSave({
-      id: initial?.id,
-      meal,
-      dish: dish.trim(),
-      time: time || null,
-      category,
-      subtype: sub.key,
-      quantity: qtyNum,
-      unit: sub.unit,
-      portions,
-      note: note.trim() || null,
-    });
-  };
-
-  return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
-      <form className="modal" onSubmit={submit}>
-        <div className="modal-head">
-          <span className="modal-title">{initial ? "Изменить запись" : "Новая запись"} · {meal}</span>
-          <button type="button" className="icon-btn" onClick={onCancel}><X size={18} /></button>
-        </div>
-
-        <label className="field-label">Блюдо</label>
-        <input ref={firstRef} className="text-input" value={dish} onChange={(e) => setDish(e.target.value)}
-          placeholder="Например: Куриная грудка" required />
-
-        <div className="row-2">
-          <div>
-            <label className="field-label">Время</label>
-            <input type="time" className="text-input" value={time || ""} onChange={(e) => setTime(e.target.value)} />
-          </div>
-          <div>
-            <label className="field-label">Группа</label>
-            <select className="text-input" value={category} onChange={(e) => setCategory(e.target.value)}>
-              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-              <option value={LEGUMES_KEY}>Бобовые (белок + углеводы)</option>
-            </select>
-          </div>
-        </div>
-
-        {!isLegumes && cat && cat.subtypes.length > 1 && (
-          <>
-            <label className="field-label">Тип</label>
-            <select className="text-input" value={sub?.key} onChange={(e) => setSubtype(e.target.value)}>
-              {cat.subtypes.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-          </>
-        )}
-
-        <label className="field-label">
-          {isLegumes ? "Количество (г, сухой/готовый вес)" : `Количество (${sub?.unit})`}
-        </label>
-        <input
-          type="number" step="0.5" min="0" className="text-input" value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-          placeholder={isLegumes ? "Вес в г" : `Вес в ${sub?.unit}`}
-          required
-        />
-
-        {isLegumes ? (
-          <div className="calc-hint" style={{ color: "#A6553C" }}>
-            ≈ {fmt(legumesPortion)} порц. белков + {fmt(legumesPortion)} порц. углеводов
-            <br />({half || 0} г белков + {half || 0} г углеводов, по {LEGUMES_GRAMS_PER_HALF_PORTION} г = 1 порция)
-          </div>
-        ) : (
-          <div className="calc-hint" style={{ color: cat?.color }}>
-            ≈ {fmt(portions)} порц. ({sub?.unitsPerPortion} {sub?.unit} = 1 порция)
-          </div>
-        )}
-
-        <label className="field-label">Комментарий</label>
-        <input className="text-input" value={note} onChange={(e) => setNote(e.target.value)}
-          placeholder="Например: съела лишнее, было вкусно и т.п." />
-
-        <div className="modal-actions">
-          <button type="button" className="btn-ghost" onClick={onCancel}>Отмена</button>
-          <button type="submit" className="btn-primary"><Check size={16} /> Сохранить</button>
-        </div>
-      </form>
-    </div>
-  );
+export function fmt(n) {
+  const r = Math.round(n * 10) / 10;
+  const s = Number.isInteger(r) ? String(r) : String(r.toFixed(1));
+  return s.replace(".", ",");
 }
